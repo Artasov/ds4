@@ -1,23 +1,26 @@
 import io
 
-from rest_framework import generics, mixins
+from django.contrib.auth.models import User
+from rest_framework import generics, mixins, viewsets
 from django.forms import model_to_dict
 from django.utils import timezone
 from rest_framework import serializers, status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, action
 from rest_framework.generics import GenericAPIView
 from rest_framework.parsers import JSONParser
-from rest_framework.permissions import IsAdminUser
+from rest_framework.permissions import IsAdminUser, BasePermission, SAFE_METHODS
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
+from rest_framework.viewsets import GenericViewSet
 
-from blog.models import Comment, Post
+from blog.models import Comment, Post, Category
 
 
-@api_view()
-def comment_example(request):
-    if request.method == 'GET':
-        return Response({'response': 'success'})
+# @api_view()
+# def comment_example(request):
+#     if request.method == 'GET':
+#         return Response({'response': 'success'})
+
 
 # @api_view(('POST', 'GET'))
 # def comment_example(request):
@@ -39,11 +42,14 @@ def comment_example(request):
 #         post_id = request.data.get('post_id')
 #         author_id = request.data.get('author_id')
 #         text = request.data.get('text')
+#
 #         comment_ = Comment.objects.create(
-#             post_id=post_id,
+#             # post_id=post_id,
+#             post=Post.objects.get(id=post_id),
 #             author_id=author_id,
 #             text=text
 #         )
+#
 #         return Response({
 #             **{'POST': 'success'},
 #             **{'comment': {**model_to_dict(comment_)}}
@@ -198,22 +204,16 @@ def comment_example(request):
 #         fields = '__all__'
 
 
-# class CommentAPIListCreate(generics.ListCreateAPIView):
-#     queryset = Comment.objects.all()
-#     serializer_class = CommentSerializer
-
-
-# @api_view
-# def comment_list(request):
-#     if request.method == 'GET':
-#         return Response(CommentSerializer(Comment.objects.all(), many=True))
-#
-#
 # class CommentAPIUpdate(generics.UpdateAPIView):
 #     queryset = Comment.objects.all()
 #     serializer_class = CommentSerializer
-
-
+#
+#
+# class CommentAPIListCreate(generics.ListCreateAPIView):
+#     queryset = Comment.objects.all()
+#     serializer_class = CommentSerializer
+#
+#
 # class CommentAPIGetPutDelete(mixins.RetrieveModelMixin,
 #                              mixins.UpdateModelMixin,
 #                              mixins.DestroyModelMixin,
@@ -221,3 +221,58 @@ def comment_example(request):
 #                              GenericAPIView):
 #     queryset = Comment.objects.all()
 #     serializer_class = CommentSerializer
+
+class CommentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Comment
+        fields = '__all__'
+
+
+class CommentViewSet(mixins.CreateModelMixin,
+                     mixins.RetrieveModelMixin,
+                     mixins.UpdateModelMixin,
+                     mixins.DestroyModelMixin,
+                     mixins.ListModelMixin,
+                     GenericViewSet):
+    queryset = Comment.objects.all()
+    serializer_class = CommentSerializer
+
+
+class PostSerializer(serializers.ModelSerializer):
+    author = serializers.HiddenField(default=serializers.CurrentUserDefault)
+
+    class Meta:
+        model = Post
+        fields = '__all__'
+
+
+class IsAdminOrAuthenticatedUser(BasePermission):
+    def has_permission(self, request, view):
+        if view.action in ('create', 'update', 'destroy'):
+            return request.user.is_authenticated and request.user.is_staff
+        return request.user.is_authenticated
+
+
+class PostViewSet(viewsets.ModelViewSet):
+    queryset = Post.objects.all()
+    serializer_class = PostSerializer
+    pagination_class = ()
+    # @action(methods=('get', ), detail=False)
+    # def categories(self, request):
+    #     categories_ = Category.objects.all()
+    #     return Response({
+    #         'categories': [c.title for c in categories_]
+    #     })
+    #
+    # @action(methods=('get',), detail=True)
+    # def category(self, request, pk=None):
+    #     category = Category.objects.get(id=pk)
+    #     return Response({
+    #         'category': model_to_dict(category)
+    #     })
+#     #
+#     def get_queryset(self):
+#         pk = self.kwargs.get('pk')
+#         if not pk:
+#             return Post.objects.filter(is_published=True)
+#         return Post.objects.get(id=pk)
